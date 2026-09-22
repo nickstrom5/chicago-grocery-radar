@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>Chicago Grocery Radar</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Outfit:wght@400;600;750&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#0e1210;--panel:#1b231e;--ink:#e8efe6;--muted:#8b9a8a;--line:#2a352d;--accent:#c8f16a;--chip:#243028}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Outfit,system-ui,sans-serif}
+button,input,select{font:inherit;color:inherit;font-size:16px}
+header.top{display:flex;flex-wrap:wrap;gap:10px;padding:12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#101510;z-index:5}
+.searchwrap{flex:1;min-width:100%;position:relative}
+.searchwrap input{width:100%;background:#0c100e;border:1px solid #334036;border-radius:14px;padding:14px 14px 14px 40px}
+nav.tabs{display:flex;overflow-x:auto;gap:0;padding:6px 8px 0;border-bottom:1px solid var(--line)}
+nav.tabs button{background:0;border:0;color:var(--muted);padding:12px;white-space:nowrap}
+nav.tabs button.on{color:var(--ink);border-bottom:2px solid var(--accent)}
+main{padding:12px 12px 40px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.pill{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:6px 10px;margin:3px;font-size:13px}
+.pill.on{border-color:#6a8f3a;color:var(--accent)}
+.result{display:grid;grid-template-columns:52px 1fr auto;gap:8px;padding:10px 0;border-bottom:1px solid #243028}
+.price{font-family:IBM Plex Mono,monospace;font-size:16px}
+.badge{font-size:10px;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:2px 6px;color:var(--muted)}
+.badge.live{color:#d7ff8a;border-color:#5d7a32}.badge.great{background:var(--accent);color:#14200f;border:0}
+.muted{color:var(--muted);font-size:12px}.statrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{background:#141a16;border:1px solid var(--line);border-radius:12px;padding:10px}.stat b{display:block;font-family:IBM Plex Mono,monospace;font-size:18px}
+.warnbar{background:#2a2314;border:1px solid #5a4a22;color:#f3d9a0;padding:8px 12px;border-radius:10px;font-size:12px;margin-bottom:12px}
+</style></head>
+<body>
+<header class="top">
+  <div><b>Chicago Grocery Radar</b><div class="muted">Live circulars + staple book</div></div>
+  <select id="zip"></select>
+  <button class="pill" id="refresh">↻ ads</button>
+  <div class="searchwrap"><input id="q" placeholder="eggs, chicken breast, grapes…"/></div>
+</header>
+<nav class="tabs">
+  <button class="on" data-tab="compare">Compare</button>
+  <button data-tab="sales">Sales</button>
+  <button data-tab="staples">Staple book</button>
+  <button data-tab="list">Trip list</button>
+</nav>
+<main>
+  <div id="status" class="muted"></div>
+  <div id="down" class="warnbar" hidden>API is warming or missing. If this is a first Vercel deploy, wait 30s and reload.</div>
+  <section id="tab-compare">
+    <div class="statrow" id="stats"></div>
+    <div class="card"><div id="storeFilters"></div><div id="results" class="muted">Type an item.</div></div>
+  </section>
+  <section id="tab-sales" hidden><div id="sales"></div></section>
+  <section id="tab-staples" hidden><div class="card" id="stapleBox"></div></section>
+  <section id="tab-list" hidden><div class="card" id="list"></div></section>
+</main>
+<script>
+const state={zip:localStorage.getItem('gr.zip')||'60614',tab:'compare',storesOn:null,list:JSON.parse(localStorage.getItem('gr.list')||'[]'),meta:null};
+const $=id=>document.getElementById(id);
+const money=n=>n==null?'—':'$'+Number(n).toFixed(2);
+async function api(path){const r=await fetch(path);if(!r.ok)throw new Error(await r.text());return r.json();}
+function renderTabs(){document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===state.tab));['compare','sales','staples','list'].forEach(t=>$('tab-'+t).hidden=t!==state.tab);}
+function storeFilters(){if(!state.meta)return;const stores=Object.keys(state.meta.stores);if(!state.storesOn)state.storesOn=stores.slice();
+$('storeFilters').innerHTML=stores.map(s=>`<button class="pill ${state.storesOn.includes(s)?'on':''}" data-s="${s}">${s}</button>`).join('')+'<button class="pill" data-s="ALL">all</button>';
+$('storeFilters').querySelectorAll('button').forEach(b=>b.onclick=()=>{const s=b.dataset.s;if(s==='ALL')state.storesOn=stores.slice();else if(state.storesOn.includes(s))state.storesOn=state.storesOn.filter(x=>x!==s);else state.storesOn.push(s);storeFilters();if(state.last)drawResults(state.last);});}
+function drawResults(data){state.last=data;const live=(data.results||[]).filter(r=>!state.storesOn||state.storesOn.includes(r.store));const priced=live.map(r=>r.price).filter(p=>p!=null);const low=priced.length?Math.min(...priced):null;
+$('stats').innerHTML=`<div class="stat"><span class="muted">Best</span><b>${money(data.summary&&data.summary.low)}</b></div><div class="stat"><span class="muted">Live hits</span><b>${(data.summary&&data.summary.live_hits)||0}</b></div>`;
+$('results').innerHTML=live.length?live.map(r=>`<div class="result"><div></div><div><div style="color:${(r.store_meta&&r.store_meta.color)||'#8b9a8a'}">${r.store}</div>${r.name}<div class="muted"><span class="badge ${r.source==='live_ad'?'live':''}">${r.source==='live_ad'?'live ad':'typical'}</span> ${r.verdict?`<span class="badge ${r.verdict.tone}">${r.verdict.label}</span>`:''}</div></div><div class="price">${money(r.price)}</div></div>`).join(''):'<div class="muted">No hits.</div>';}
+async function search(q){q=(q||$('q').value||'').trim();if(q.length<2)return;$('q').value=q;$('status').textContent='Searching '+q+'…';
+try{const data=await api('/api/search?q='+encodeURIComponent(q)+'&zip='+state.zip);drawResults(data);$('status').textContent='ZIP '+data.zip+' · '+data.indexed_items+' ad items';}catch(e){$('status').textContent=e.message;$('down').hidden=false;}}
+async function boot(){try{state.meta=await api('/api/meta');$('zip').innerHTML=state.meta.zips.map(z=>`<option value="${z.zip}">${z.zip} · ${z.label}</option>`).join('');$('zip').value=state.zip;storeFilters();
+$('status').textContent='Indexing ads…';await api('/api/warmup?zip='+state.zip);$('status').textContent='Ready.';}catch(e){$('down').hidden=false;$('status').textContent=e.message;}}
+$('zip').onchange=()=>{state.zip=$('zip').value;localStorage.setItem('gr.zip',state.zip);boot();};
+$('q').addEventListener('keydown',e=>{if(e.key==='Enter')search();});
+$('refresh').onclick=()=>api('/api/warmup?zip='+state.zip+'&refresh=1').then(()=>state.last&&search($('q').value));
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=async()=>{state.tab=b.dataset.tab;renderTabs();if(state.tab==='sales'){const d=await api('/api/sales?zip='+state.zip);$('sales').innerHTML=(d.stores||[]).map(s=>`<div class="card"><b>${s.store}</b>${(s.deals||[]).slice(0,10).map(x=>`<div class="result"><div></div><div>${x.name}</div><div class="price">${money(x.price)}</div></div>`).join('')}</div>`).join('');}if(state.tab==='staples'){const d=await api('/api/staples');$('stapleBox').innerHTML=d.items.map(i=>`<div><b>${i.name}</b> <span class="muted">ALDI ${money(i.prices.ALDI)} · Woodman ${money(i.prices["Woodman's"])} · Jewel ${money(i.prices['Jewel-Osco'])}</span></div>`).join('');}});
+boot();
+</script></body></html>
