@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/radar.js": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    { "source": "/api/health", "destination": "/api/radar" },
+    { "source": "/api/meta", "destination": "/api/radar" },
+    { "source": "/api/warmup", "destination": "/api/radar" },
+    { "source": "/api/flyers", "destination": "/api/radar" },
+    { "source": "/api/search", "destination": "/api/radar" },
+    { "source": "/api/sales", "destination": "/api/radar" },
+    { "source": "/api/staples", "destination": "/api/radar" }
+  ]
+}
